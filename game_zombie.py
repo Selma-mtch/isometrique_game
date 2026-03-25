@@ -31,7 +31,12 @@ MAP_COLS = len(GAME_MAP[0])
 MAP_ROWS = len(GAME_MAP)
 
 player = None
+zombie_spawns = []
 game_alive = True
+game_score = 0.0
+spawn_timer = 3.0
+want_restart = False
+last_time = 0.0
 
 
 class Player(libgame.Walker2D):
@@ -118,17 +123,59 @@ class Zombie2D(libgame.Element):
         self.dontadjust = True
 
 
+class GameHUD(libgame.Element):
+
+    def __init__(self, w: int, h: int):
+        super().__init__(pygame.Rect(0, 0, 0, 0))
+        self.gravity = 0
+        self.type = "hud"
+        self.depth = 100
+        self.sw, self.sh = w, h
+        self.font = pygame.font.SysFont("Arial", 18, bold=True)
+        self.big_font = pygame.font.SysFont("Arial", 40, bold=True)
+
+    def do_paint(self, screen):
+        txt = f"Survie: {int(game_score)}s"
+        screen.blit(self.font.render(txt, True, (0, 0, 0)), (11, 11))
+        screen.blit(self.font.render(txt, True, (255, 255, 255)), (10, 10))
+        if not game_alive:
+            overlay = pygame.Surface((self.sw, self.sh), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 140))
+            screen.blit(overlay, (0, 0))
+            go = self.big_font.render("GAME OVER", True, (220, 40, 40))
+            screen.blit(go, go.get_rect(center=(self.sw // 2, self.sh // 2 - 20)))
+            info = self.font.render(
+                f"Survie: {int(game_score)}s  -  ESPACE: recommencer",
+                True, (255, 255, 255),
+            )
+            screen.blit(info, info.get_rect(center=(self.sw // 2, self.sh // 2 + 25)))
+
+    def do_accelerate(self, etime):
+        pass
+
+    def do_move(self, etime):
+        pass
+
+    def do_adjustspeed(self, etime):
+        pass
+
+
 def game_init(scene: libgame.Scene) -> List[libgame.Element]:
-    global player, game_alive
+    global player, zombie_spawns, game_alive, game_score, spawn_timer, last_time
     game_alive = True
+    game_score = 0.0
+    spawn_timer = 3.0
+    last_time = 0.0
+
+    width, height = scene.window_size
     objects: List[libgame.Element] = []
+    zombie_spawns = []
 
     grass = libgame.Ground((80, 150, 60), 0, 0, MAP_COLS * TILE, MAP_ROWS * TILE)
     grass.depth = 1
     objects.append(grass)
 
     player = None
-    zombie_spawns = []
 
     for row_i, row in enumerate(GAME_MAP):
         for col_i, ch in enumerate(row):
@@ -150,48 +197,72 @@ def game_init(scene: libgame.Scene) -> List[libgame.Element]:
     for zx, zy in zombie_spawns:
         objects.append(Zombie2D(zx, zy, player))
 
+    objects.append(GameHUD(width, height))
     return objects
 
 
 def game_controller(objects: List[libgame.Element], event: pygame.event.Event) -> bool:
+    global want_restart
     if event.type == pygame.KEYDOWN:
         if event.key == pygame.K_ESCAPE:
+            want_restart = False
+            return False
+        if event.key == pygame.K_SPACE and not game_alive:
+            want_restart = True
             return False
     return True
 
 
 def game_prepaint(scene: libgame.Scene) -> bool:
-    global game_alive
+    global game_alive, game_score, spawn_timer, last_time
+
+    if last_time == 0.0:
+        last_time = scene.time_game
+    dt = scene.time_game - last_time
+    last_time = scene.time_game
 
     if game_alive:
+        game_score += dt
+
+        spawn_timer -= dt
+        if spawn_timer <= 0 and zombie_spawns:
+            zx, zy = random.choice(zombie_spawns)
+            new_z = Zombie2D(zx, zy, player)
+            scene.objects.append(new_z)
+            scene.objects_by_depth.append(new_z)
+            spawn_timer = max(1.0, 3.0 - game_score * 0.03)
+
         for obj in scene.objects:
             if obj.type == "zombie":
                 dx = obj.x - player.x
                 dy = obj.y - player.y
                 if math.sqrt(dx * dx + dy * dy) < 10:
                     game_alive = False
-                    print(f"GAME OVER !")
-                    return False
 
+    # Camera centree sur le joueur
     width, height = scene.window_size
     dx = player.rect.centerx - width // 2
     dy = player.rect.centery - height // 2
     if abs(dx) > 1 or abs(dy) > 1:
         for obj in scene.objects:
-            obj.x -= dx
-            obj.y -= dy
-            obj.adjust_position_from_center()
+            if obj.type != "hud":
+                obj.x -= dx
+                obj.y -= dy
+                obj.adjust_position_from_center()
 
     return True
 
 
 if __name__ == "__main__":
-    game = libgame.Scene(
-        init=game_init,
-        controller=game_controller,
-        prepaint=game_prepaint,
-    )
-    RUN = True
-    while RUN:
-        RUN = game.mainloop()
+    want_restart = True
+    while want_restart:
+        want_restart = False
+        game = libgame.Scene(
+            init=game_init,
+            controller=game_controller,
+            prepaint=game_prepaint,
+        )
+        RUN = True
+        while RUN:
+            RUN = game.mainloop()
     print(f"Fin apres {libgame.loops} frames")

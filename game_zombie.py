@@ -230,14 +230,23 @@ def game_prepaint(scene: libgame.Scene) -> bool:
             new_z = Zombie2D(zx, zy, player)
             scene.objects.append(new_z)
             scene.objects_by_depth.append(new_z)
-            spawn_timer = max(1.0, 3.0 - game_score * 0.03)
+            spawn_timer = max(0.3, 1.5 - game_score * 0.05)
 
+        # Supprimer les zombies trop loin du joueur
+        to_remove = []
         for obj in scene.objects:
             if obj.type == "zombie":
                 dx = obj.x - player.x
                 dy = obj.y - player.y
-                if math.sqrt(dx * dx + dy * dy) < 10:
+                dist = math.sqrt(dx * dx + dy * dy)
+                if dist < 10:
                     game_alive = False
+                elif dist > 800:
+                    to_remove.append(obj)
+        for obj in to_remove:
+            scene.objects.remove(obj)
+            if obj in scene.objects_by_depth:
+                scene.objects_by_depth.remove(obj)
 
     # Camera centree sur le joueur
     width, height = scene.window_size
@@ -249,6 +258,10 @@ def game_prepaint(scene: libgame.Scene) -> bool:
                 obj.x -= dx
                 obj.y -= dy
                 obj.adjust_position_from_center()
+        # Mettre a jour les positions de spawn avec le decalage camera
+        for i in range(len(zombie_spawns)):
+            zx, zy = zombie_spawns[i]
+            zombie_spawns[i] = (zx - dx, zy - dy)
 
     return True
 

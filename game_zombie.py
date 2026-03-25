@@ -113,6 +113,11 @@ class IsoGround(libgame.Element):
 
 class Player(libgame.Walker2D):
 
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.z = 0.0
+        self.vz = 0.0
+
     def do_event(self, event):
         return True
 
@@ -135,14 +140,21 @@ class Player(libgame.Walker2D):
             sdy -= 1
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             sdy += 1
+        if keys[pygame.K_SPACE] and self.z == 0:
+            self.vz = 200
         if sdx != 0 and sdy != 0:
             sdx *= 0.707
             sdy *= 0.707
         self.vx = (sdx * 0.5 + sdy) * speed
         self.vy = (-sdx * 0.5 + sdy) * speed
-        if is_in_water(self):
+        if is_in_water(self) and self.z == 0:
             self.vx *= 0.4
             self.vy *= 0.4
+        self.vz -= 600 * etime
+        self.z += self.vz * etime
+        if self.z <= 0:
+            self.z = 0
+            self.vz = 0
         self.dontadjust = True
 
     def do_paint(self, screen):
@@ -156,7 +168,11 @@ class Player(libgame.Walker2D):
             base = "manW" if iso_vx < 0 else "manE"
         img = self.images[base + str(state)]
         ix, iy = to_iso(self.x, self.y, sw, sh)
-        screen.blit(img, img.get_rect(center=(int(ix), int(iy))))
+        if self.z > 0:
+            shadow = pygame.Surface((12, 6), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (0, 0, 0, 80), shadow.get_rect())
+            screen.blit(shadow, shadow.get_rect(center=(int(ix), int(iy))))
+        screen.blit(img, img.get_rect(center=(int(ix), int(iy - self.z))))
 
 
 class Zombie2D(libgame.Element):
@@ -346,7 +362,7 @@ def game_prepaint(scene: libgame.Scene) -> bool:
                 zdx = obj.x - player.x
                 zdy = obj.y - player.y
                 dist2 = zdx * zdx + zdy * zdy
-                if dist2 < 100:
+                if dist2 < 100 and player.z < 5:
                     game_alive = False
                 elif dist2 > 640000:
                     to_remove.append(obj)

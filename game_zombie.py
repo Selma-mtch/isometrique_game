@@ -5,6 +5,7 @@ import random
 from typing import List, Dict
 
 TILE = 32
+
 GAME_MAP = [
     "XXXXXXXXXXXXXXXX",
     "X..............X",
@@ -31,7 +32,7 @@ MAP_COLS = len(GAME_MAP[0])
 MAP_ROWS = len(GAME_MAP)
 
 player = None
-zombie_spawns_grid = []  # positions en (col, row) sur la grille
+zombie_spawns_grid = []
 camera_offset_x = 0.0
 camera_offset_y = 0.0
 game_alive = True
@@ -39,6 +40,75 @@ game_score = 0.0
 spawn_timer = 3.0
 want_restart = False
 last_time = 0.0
+
+
+def is_in_water(obj):
+    hw = obj.rect.width / 2
+    hh = obj.rect.height / 2
+    for w in water_tiles:
+        whw = w.tile_w / 2
+        whh = w.tile_h / 2
+        if (obj.x - hw < w.x + whw and obj.x + hw > w.x - whw
+                and obj.y - hh < w.y + whh and obj.y + hh > w.y - whh):
+            return True
+    return False
+
+
+def to_iso(wx, wy, sw, sh):
+    iso_x = (wx - wy) + sh / 2
+    iso_y = (wx + wy) / 2 + (sh - sw) / 4
+    return iso_x, iso_y
+
+
+water_tiles = []
+
+
+class IsoGround(libgame.Element):
+
+    def __init__(self, color, x, y, w, h, block_height=0, ground_type="ground"):
+        super().__init__(pygame.Rect(x, y, w, h))
+        self.gravity = 0
+        self.color = color
+        self.x = self.rect.centerx
+        self.y = self.rect.centery
+        self.depth = 5
+        self.type = ground_type
+        self.tile_w = w
+        self.tile_h = h
+        self.block_height = block_height
+        self.finalize()
+
+    def do_paint(self, screen):
+        sw, sh = screen.get_size()
+        cx, cy = self.x, self.y
+        hw, hh = self.tile_w / 2, self.tile_h / 2
+        top = to_iso(cx - hw, cy - hh, sw, sh)
+        right = to_iso(cx + hw, cy - hh, sw, sh)
+        bottom = to_iso(cx + hw, cy + hh, sw, sh)
+        left = to_iso(cx - hw, cy + hh, sw, sh)
+        points = [top, right, bottom, left]
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        if max(xs) < -64 or min(xs) > sw + 64 or max(ys) < -64 or min(ys) > sh + 64:
+            return
+        bh = self.block_height
+        if bh > 0:
+            dark = tuple(max(0, int(c * 0.55)) for c in self.color)
+            darker = tuple(max(0, int(c * 0.35)) for c in self.color)
+            pygame.draw.polygon(screen, darker, [
+                left, bottom,
+                (bottom[0], bottom[1] + bh),
+                (left[0], left[1] + bh),
+            ])
+            pygame.draw.polygon(screen, dark, [
+                right, bottom,
+                (bottom[0], bottom[1] + bh),
+                (right[0], right[1] + bh),
+            ])
+        pygame.draw.polygon(screen, self.color, points)
+        if self.tile_w <= TILE * 2:
+            outline = tuple(max(0, c - 25) for c in self.color)
+            pygame.draw.polygon(screen, outline, points, 1)
 
 
 class Player(libgame.Walker2D):
@@ -56,20 +126,37 @@ class Player(libgame.Walker2D):
             return
         keys = pygame.key.get_pressed()
         speed = 80
-        self.vx = 0
-        self.vy = 0
+        sdx, sdy = 0, 0
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            self.vx -= speed
+            sdx -= 1
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            self.vx += speed
+            sdx += 1
         if keys[pygame.K_UP] or keys[pygame.K_w]:
-            self.vy -= speed
+            sdy -= 1
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            self.vy += speed
-        if self.vx != 0 and self.vy != 0:
-            self.vx *= 0.707
-            self.vy *= 0.707
+            sdy += 1
+        if sdx != 0 and sdy != 0:
+            sdx *= 0.707
+            sdy *= 0.707
+        self.vx = (sdx * 0.5 + sdy) * speed
+        self.vy = (-sdx * 0.5 + sdy) * speed
+        if is_in_water(self):
+            self.vx *= 0.4
+            self.vy *= 0.4
         self.dontadjust = True
+
+    def do_paint(self, screen):
+        sw, sh = screen.get_size()
+        state = int(self.distance / 4) % 4
+        iso_vx = self.vx - self.vy
+        iso_vy = (self.vx + self.vy) / 2
+        if abs(iso_vy) > abs(iso_vx):
+            base = "manN" if iso_vy < 0 else "manS"
+        else:
+            base = "manW" if iso_vx < 0 else "manE"
+        img = self.images[base + str(state)]
+        ix, iy = to_iso(self.x, self.y, sw, sh)
+        screen.blit(img, img.get_rect(center=(int(ix), int(iy))))
 
 
 class Zombie2D(libgame.Element):
@@ -101,12 +188,17 @@ class Zombie2D(libgame.Element):
         self.finalize()
 
     def do_paint(self, screen):
+        sw, sh = screen.get_size()
         state = int(self.distance / 4) % 4
-        if abs(self.vy) > abs(self.vx):
-            d = "N" if self.vy < 0 else "S"
+        iso_vx = self.vx - self.vy
+        iso_vy = (self.vx + self.vy) / 2
+        if abs(iso_vy) > abs(iso_vx):
+            d = "N" if iso_vy < 0 else "S"
         else:
-            d = "W" if self.vx < 0 else "E"
-        screen.blit(self._sprites[f"z{d}{state}"], self.rect)
+            d = "W" if iso_vx < 0 else "E"
+        img = self._sprites[f"z{d}{state}"]
+        ix, iy = to_iso(self.x, self.y, sw, sh)
+        screen.blit(img, img.get_rect(center=(int(ix), int(iy))))
 
     def do_accelerate(self, etime):
         self.oldx = self.x
@@ -122,6 +214,9 @@ class Zombie2D(libgame.Element):
         if dist > 1:
             self.vx = (dx / dist) * self.speed
             self.vy = (dy / dist) * self.speed
+        if is_in_water(self):
+            self.vx *= 0.4
+            self.vy *= 0.4
         self.dontadjust = True
 
 
@@ -175,8 +270,9 @@ def game_init(scene: libgame.Scene) -> List[libgame.Element]:
     width, height = scene.window_size
     objects: List[libgame.Element] = []
     zombie_spawns_grid = []
+    water_tiles.clear()
 
-    grass = libgame.Ground((80, 150, 60), 0, 0, MAP_COLS * TILE, MAP_ROWS * TILE)
+    grass = IsoGround((80, 150, 60), 0, 0, MAP_COLS * TILE, MAP_ROWS * TILE)
     grass.depth = 1
     objects.append(grass)
 
@@ -187,11 +283,13 @@ def game_init(scene: libgame.Scene) -> List[libgame.Element]:
             wx = col_i * TILE
             wy = row_i * TILE
             if ch == "X":
-                objects.append(libgame.Ground((80, 70, 65), wx, wy, TILE, TILE))
+                objects.append(IsoGround((100, 85, 75), wx, wy, TILE, TILE, block_height=10))
             elif ch == "W":
-                objects.append(libgame.Ground((40, 100, 190), wx, wy, TILE, TILE))
+                w_tile = IsoGround((40, 100, 190), wx, wy, TILE, TILE, ground_type="water")
+                objects.append(w_tile)
+                water_tiles.append(w_tile)
             elif ch == "T":
-                objects.append(libgame.Ground((30, 110, 40), wx, wy, TILE, TILE))
+                objects.append(IsoGround((30, 110, 40), wx, wy, TILE, TILE, block_height=6))
             elif ch == "P":
                 player = Player(wx + TILE // 2, wy + TILE // 2)
             elif ch == "Z":
@@ -221,7 +319,8 @@ def game_controller(objects: List[libgame.Element], event: pygame.event.Event) -
 
 
 def game_prepaint(scene: libgame.Scene) -> bool:
-    global game_alive, game_score, spawn_timer, last_time, camera_offset_x, camera_offset_y
+    global game_alive, game_score, spawn_timer, last_time
+    global camera_offset_x, camera_offset_y
 
     if last_time == 0.0:
         last_time = scene.time_game
@@ -241,23 +340,21 @@ def game_prepaint(scene: libgame.Scene) -> bool:
             scene.objects_by_depth.append(new_z)
             spawn_timer = max(0.3, 1.5 - game_score * 0.05)
 
-        # Supprimer les zombies trop loin du joueur
         to_remove = []
         for obj in scene.objects:
             if obj.type == "zombie":
                 zdx = obj.x - player.x
                 zdy = obj.y - player.y
-                dist = zdx * zdx + zdy * zdy
-                if dist < 100:  # 10^2
+                dist2 = zdx * zdx + zdy * zdy
+                if dist2 < 100:
                     game_alive = False
-                elif dist > 640000:  # 800^2
+                elif dist2 > 640000:
                     to_remove.append(obj)
         for obj in to_remove:
             scene.objects.remove(obj)
             if obj in scene.objects_by_depth:
                 scene.objects_by_depth.remove(obj)
 
-    # Camera centree sur le joueur
     width, height = scene.window_size
     dx = player.rect.centerx - width // 2
     dy = player.rect.centery - height // 2
@@ -270,6 +367,8 @@ def game_prepaint(scene: libgame.Scene) -> bool:
         camera_offset_x += dx
         camera_offset_y += dy
 
+    scene.objects_by_depth.sort(key=lambda o: (o.depth, o.x + o.y))
+
     return True
 
 
@@ -278,6 +377,8 @@ if __name__ == "__main__":
     while want_restart:
         want_restart = False
         game = libgame.Scene(
+            width=800,
+            height=600,
             init=game_init,
             controller=game_controller,
             prepaint=game_prepaint,

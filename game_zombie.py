@@ -31,7 +31,9 @@ MAP_COLS = len(GAME_MAP[0])
 MAP_ROWS = len(GAME_MAP)
 
 player = None
-zombie_spawns = []
+zombie_spawns_grid = []  # positions en (col, row) sur la grille
+camera_offset_x = 0.0
+camera_offset_y = 0.0
 game_alive = True
 game_score = 0.0
 spawn_timer = 3.0
@@ -161,15 +163,18 @@ class GameHUD(libgame.Element):
 
 
 def game_init(scene: libgame.Scene) -> List[libgame.Element]:
-    global player, zombie_spawns, game_alive, game_score, spawn_timer, last_time
+    global player, zombie_spawns_grid, camera_offset_x, camera_offset_y
+    global game_alive, game_score, spawn_timer, last_time
     game_alive = True
     game_score = 0.0
     spawn_timer = 3.0
     last_time = 0.0
+    camera_offset_x = 0.0
+    camera_offset_y = 0.0
 
     width, height = scene.window_size
     objects: List[libgame.Element] = []
-    zombie_spawns = []
+    zombie_spawns_grid = []
 
     grass = libgame.Ground((80, 150, 60), 0, 0, MAP_COLS * TILE, MAP_ROWS * TILE)
     grass.depth = 1
@@ -190,11 +195,13 @@ def game_init(scene: libgame.Scene) -> List[libgame.Element]:
             elif ch == "P":
                 player = Player(wx + TILE // 2, wy + TILE // 2)
             elif ch == "Z":
-                zombie_spawns.append((wx + TILE // 2, wy + TILE // 2))
+                zombie_spawns_grid.append((col_i, row_i))
 
     objects.append(player)
 
-    for zx, zy in zombie_spawns:
+    for col, row in zombie_spawns_grid:
+        zx = col * TILE + TILE // 2
+        zy = row * TILE + TILE // 2
         objects.append(Zombie2D(zx, zy, player))
 
     objects.append(GameHUD(width, height))
@@ -214,7 +221,7 @@ def game_controller(objects: List[libgame.Element], event: pygame.event.Event) -
 
 
 def game_prepaint(scene: libgame.Scene) -> bool:
-    global game_alive, game_score, spawn_timer, last_time
+    global game_alive, game_score, spawn_timer, last_time, camera_offset_x, camera_offset_y
 
     if last_time == 0.0:
         last_time = scene.time_game
@@ -225,8 +232,10 @@ def game_prepaint(scene: libgame.Scene) -> bool:
         game_score += dt
 
         spawn_timer -= dt
-        if spawn_timer <= 0 and zombie_spawns:
-            zx, zy = random.choice(zombie_spawns)
+        if spawn_timer <= 0 and zombie_spawns_grid:
+            col, row = random.choice(zombie_spawns_grid)
+            zx = col * TILE + TILE // 2 - camera_offset_x
+            zy = row * TILE + TILE // 2 - camera_offset_y
             new_z = Zombie2D(zx, zy, player)
             scene.objects.append(new_z)
             scene.objects_by_depth.append(new_z)
@@ -236,12 +245,12 @@ def game_prepaint(scene: libgame.Scene) -> bool:
         to_remove = []
         for obj in scene.objects:
             if obj.type == "zombie":
-                dx = obj.x - player.x
-                dy = obj.y - player.y
-                dist = math.sqrt(dx * dx + dy * dy)
-                if dist < 10:
+                zdx = obj.x - player.x
+                zdy = obj.y - player.y
+                dist = zdx * zdx + zdy * zdy
+                if dist < 100:  # 10^2
                     game_alive = False
-                elif dist > 800:
+                elif dist > 640000:  # 800^2
                     to_remove.append(obj)
         for obj in to_remove:
             scene.objects.remove(obj)
@@ -258,10 +267,8 @@ def game_prepaint(scene: libgame.Scene) -> bool:
                 obj.x -= dx
                 obj.y -= dy
                 obj.adjust_position_from_center()
-        # Mettre a jour les positions de spawn avec le decalage camera
-        for i in range(len(zombie_spawns)):
-            zx, zy = zombie_spawns[i]
-            zombie_spawns[i] = (zx - dx, zy - dy)
+        camera_offset_x += dx
+        camera_offset_y += dy
 
     return True
 

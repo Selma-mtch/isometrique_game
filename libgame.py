@@ -635,7 +635,9 @@ class Scene:
         for obj in objects:
             obj.do_move(etime)
         search_collisions = True
-        while search_collisions:
+        max_collision_loops = 10
+        while search_collisions and max_collision_loops > 0:
+            max_collision_loops -= 1
             collisions = []
             for obj in objects:
                 collisions.extend(obj.do_detect(objects, etime))

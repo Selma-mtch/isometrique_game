@@ -27,52 +27,52 @@ Espace	Saut
 Un jeu isométrique est une représentation **2D simulant la 3D** grâce à une projection inclinée.
 
 ### 🔑 Principes techniques
-1. Projection isométrique (le cœur du système)
+### 1. Projection isométrique (le cœur du système)
    
-Certains jeux utilisent des coordonnées classiques (x, y) (vue du dessus).
-Pour afficher ces coordonnées à l’écran, on applique une transformation :
-def to_iso(wx, wy, sw, sh): 
-    iso_x = (wx - wy) 
-    iso_y = (wx + wy) / 2 
-    return iso_x, iso_y
+   Certains jeux utilisent des coordonnées classiques (x, y) (vue du dessus).
+   Pour afficher ces coordonnées à l’écran, on applique une transformation :
+   def to_iso(wx, wy, sw, sh): 
+       iso_x = (wx - wy) 
+       iso_y = (wx + wy) / 2 
+       return iso_x, iso_y
+   
+   * Projection des coordonnées `(x, y)` → `(iso_x, iso_y)`
+   Effet obtenu : 
+       * aller à droite → mouvement diagonal
+       * aller en bas → rapprochement visuel
+       * aller en haut → éloignement visuel
 
-* Projection des coordonnées `(x, y)` → `(iso_x, iso_y)`
-Effet obtenu : 
-    * aller à droite → mouvement diagonal
-    * aller en bas → rapprochement visuel
-    * aller en haut → éloignement visuel
+### 2. Représentation en losange (tiles isométriques)
+   Chaque case de la grille est dessinée comme un losange  car un carré en vue perspective devient un losange en projection isométrique:
+       * 4 points calculés (haut, droite, bas, gauche)
+       * dessin avec pygame.draw.polygon
 
-2. Représentation en losange (tiles isométriques)
-Chaque case de la grille est dessinée comme un losange  car un carré en vue perspective devient un losange en projection isométrique:
-    * 4 points calculés (haut, droite, bas, gauche)
-    * dessin avec pygame.draw.polygon
+### 3. Tri des objets pour simuler la profondeur
+   En 2D, tout est dessiné à plat → pas de vraie profondeur. Alors, on trie les objets: les plus "bas" sont dessinés au-dessus des autres.
 
-3. Tri des objets pour simuler la profondeur
-En 2D, tout est dessiné à plat → pas de vraie profondeur. Alors, on trie les objets: les plus "bas" sont dessinés au-dessus des autres.
+### 5. Simulation de hauteur (axe Z)
 
-5. Simulation de hauteur (axe Z)
+   self.z
+   
+   👉 Utilisation :
+   
+   saut du joueur
+   affichage décalé verticalement
+   ombre au sol
+   screen.blit(img, (x, y - self.z))
+   
+   💡 Résultat :
+   ➡️ illusion de verticalité (2.5D)
 
-self.z
-
-👉 Utilisation :
-
-saut du joueur
-affichage décalé verticalement
-ombre au sol
-screen.blit(img, (x, y - self.z))
-
-💡 Résultat :
-➡️ illusion de verticalité (2.5D)
-
-6. Caméra dynamique (centrée joueur)
-dx = player.rect.centerx - width // 2
-
-Puis déplacement de tous les objets :
-
-obj.x -= dx
-obj.y -= dy
-
-Ainsi, le joueur reste au centre et le monde bouge autour
+### 6. Caméra dynamique (centrée joueur)
+   dx = player.rect.centerx - width // 2
+   
+   Puis déplacement de tous les objets :
+   
+   obj.x -= dx
+   obj.y -= dy
+   
+   Ainsi, le joueur reste au centre et le monde bouge autour
 
 ---
 

@@ -81,6 +81,13 @@ Un jeu isométrique est une représentation **2D simulant la 3D** grâce à une 
 ### Carte
 
 ```python
+TILE = 32
+```
+
+→ Le monde est basé sur une grille de tuiles.
+
+---
+```python
 GAME_MAP = [
     "XXXXXXXXXXXXXXXX",
     ...
@@ -158,17 +165,3 @@ python main.py
 ├── screenshots/
 └── README.md
 ```
-
----
-
-## 🔍 Détails techniques
-
-### 🧱 Grille
-
-```python
-TILE = 32
-```
-
-→ Le monde est basé sur une grille de tuiles.
-
----

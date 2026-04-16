@@ -6,8 +6,6 @@
 
 ---
 
-## 🎮 Gameplay
-
 * 🧍 Contrôler les déplacements d'un personnage 
 * 🧟‍♂️ Éviter des zombies qui poursuivent le personnage
 * 🌊 Ralentissement des déplacement dans l’eau

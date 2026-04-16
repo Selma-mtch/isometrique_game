@@ -1,167 +1,143 @@
-# isometrique_game
-# 🧟‍♂️ Isometric Survival Game
+# Isometric Survival Game
 
-> Jeu de survie en **vue isométrique** développé avec **Pygame**.
-> Évite les zombies,pour survive le plus longtemps possible !
+Jeu de survie en vue isométrique développé en Python avec Pygame.
+Dirigez votre personnage, évitez les zombies et tenez le plus longtemps possible.
 
----
+## Fonctionnalités
 
-* 🧍 Contrôler les déplacements d'un personnage 
-* 🧟‍♂️ Éviter des zombies qui poursuivent le personnage
-* 🌊 Ralentissement des déplacement dans l’eau
-* ⛰️ Obstacles et reliefs
-* ⏱️ Difficulté progressive (spawn dynamique des zombies)
-* 🏆 Score basé sur le temps de survie
+- Déplacement d'un personnage en projection isométrique
+- IA de zombies qui poursuivent le joueur
+- Ralentissement dans les zones d'eau
+- Obstacles, reliefs et simulation de hauteur (saut, gravité)
+- Difficulté progressive (spawn dynamique des zombies)
+- Score basé sur le temps de survie
 
----
-🎮 Contrôles
-Touche	Action
-ZQSD / Flèches	Déplacement
-Espace	Saut
-Échap	Quitter
+## Contrôles
 
----
+| Touche           | Action        |
+| ---------------- | ------------- |
+| `Z Q S D` / Flèches | Déplacement   |
+| `Espace`         | Saut          |
+| `Échap`          | Quitter       |
 
-## 🧠 Concept : Jeu Isométrique
+## Installation
 
-Un jeu isométrique est une représentation **2D simulant la 3D** grâce à une projection inclinée.
+### Prérequis
 
-### 🔑 Principes techniques
-### 1. Projection isométrique (le cœur du système)
-   
-   Certains jeux utilisent des coordonnées classiques (x, y) (vue du dessus).
-   Pour afficher ces coordonnées à l’écran, on applique une transformation :
-   def to_iso(wx, wy, sw, sh): 
-       iso_x = (wx - wy) 
-       iso_y = (wx + wy) / 2 
-       return iso_x, iso_y
-   
-   * Projection des coordonnées `(x, y)` → `(iso_x, iso_y)`
-   Effet obtenu : 
-       * aller à droite → mouvement diagonal
-       * aller en bas → rapprochement visuel
-       * aller en haut → éloignement visuel
+- Python 3.10+
+- Pygame
 
-### 2. Représentation en losange (tiles isométriques)
-   Chaque case de la grille est dessinée comme un losange  car un carré en vue perspective devient un losange en projection isométrique:
-       * 4 points calculés (haut, droite, bas, gauche)
-       * dessin avec pygame.draw.polygon
+### Étapes
 
-### 3. Tri des objets pour simuler la profondeur
-   En 2D, tout est dessiné à plat → pas de vraie profondeur. Alors, on trie les objets: les plus "bas" sont dessinés au-dessus des autres.
-
-### 5. Simulation de hauteur (axe Z)
-
-   self.z
-   
-   👉 Utilisation :
-   
-   saut du joueur
-   affichage décalé verticalement
-   ombre au sol
-   screen.blit(img, (x, y - self.z))
-   
-   💡 Résultat :
-   ➡️ illusion de verticalité (2.5D)
-
-### 6. Caméra dynamique (centrée joueur)
-   dx = player.rect.centerx - width // 2
-   
-   Puis déplacement de tous les objets :
-   
-   obj.x -= dx
-   obj.y -= dy
-   
-   Ainsi, le joueur reste au centre et le monde bouge autour
-
----
-
-## 🗺️ Structure du jeu
-
-### Carte
-
-```python
-TILE = 32
+```bash
+git clone https://github.com/<user>/isometrique_game.git
+cd isometrique_game
+pip install pygame
+python game_zombie.py
 ```
 
-→ Le monde est basé sur une grille de tuiles.
+## Structure du projet
 
----
+```
+.
+├── game_zombie.py    # Point d'entrée du jeu (boucle principale, logique)
+├── libgame.py        # Moteur maison (Element, rendu, helpers)
+├── assets/           # Sprites, textures, sons
+└── README.md
+```
+
+## Concept technique : rendu isométrique
+
+Un jeu isométrique simule la 3D à l'aide d'une **projection 2D inclinée**.
+Les coordonnées monde `(x, y)` sont converties en coordonnées écran `(iso_x, iso_y)` :
+
+```python
+def to_iso(wx, wy, sw, sh):
+    iso_x = (wx - wy) + sh / 2
+    iso_y = (wx + wy) / 2 + (sh - sw) / 4
+    return iso_x, iso_y
+```
+
+Effets obtenus :
+- Se déplacer à droite → mouvement diagonal à l'écran
+- Se déplacer vers le bas → rapprochement visuel
+- Se déplacer vers le haut → éloignement visuel
+
+### Tuiles en losange
+
+Chaque case de la grille est dessinée comme un losange (un carré vu en perspective).
+Les 4 coins sont calculés puis tracés avec `pygame.draw.polygon`.
+
+### Tri par profondeur
+
+Le rendu 2D étant « à plat », les objets sont triés avant affichage : les plus « bas »
+à l'écran sont dessinés en dernier pour simuler la profondeur.
+
+### Axe Z (hauteur)
+
+La coordonnée `self.z` permet de simuler la verticalité (2.5D) :
+
+```python
+screen.blit(img, (x, y - self.z))
+```
+
+Utilisée pour le saut, le décalage des sprites et les ombres au sol.
+
+### Caméra centrée joueur
+
+Le joueur reste au centre de l'écran ; c'est le monde qui défile :
+
+```python
+dx = player.rect.centerx - width // 2
+obj.x -= dx
+obj.y -= dy
+```
+
+## Carte du jeu
+
+Le monde est une grille de tuiles de `TILE = 32` pixels :
+
 ```python
 GAME_MAP = [
     "XXXXXXXXXXXXXXXX",
+    "X..............X",
+    "X..T.........Z.X",
     ...
 ]
 ```
 
-| Symbole | Description      |
-| ------- | ---------------- |
-| X       | Mur              |
-| .       | Sol              |
-| W       | Eau              |
-| T       | Arbre / obstacle |
-| P       | Joueur           |
-| Z       | Spawn zombie     |
+| Symbole | Description       |
+| ------- | ----------------- |
+| `X`     | Mur               |
+| `.`     | Sol               |
+| `W`     | Eau               |
+| `T`     | Arbre / obstacle  |
+| `P`     | Joueur            |
+| `Z`     | Spawn zombie      |
 
----
-### 🧍 Joueur
+## Mécaniques de jeu
 
-* Mouvement vectoriel adapté à l’isométrie
-* Saut avec simulation de gravité
-* Suivi du joueur (vectoriel)
-* Vitesse variable (en fonction des zones de la map)
+### Joueur
 
----
+- Mouvement vectoriel adapté à la projection isométrique
+- Saut avec simulation de gravité
+- Vitesse variable selon la nature du sol (ralentissement dans l'eau)
 
-### 🧟 IA des zombies
-* Vitesse variable
-* Apparition dynamique:
-  spawn_timer = max(0.3, 1.5 - game_score * 0.05)
-  Plus le joueur survis plus c'est difficile.
----
+### Zombies
 
-### 💀 Conditions de défaite
-* Lorsque le joueur rencontre un zombie
+- Poursuite du joueur (mouvement vectoriel)
+- Vitesse variable
+- Apparition dynamique : plus le score augmente, plus les spawns sont rapides
+
+```python
+spawn_timer = max(0.3, 1.5 - game_score * 0.05)
+```
+
+### Condition de défaite
+
+La partie s'arrête dès qu'un zombie atteint le joueur au sol :
+
 ```python
 if dist2 < 100 and player.z < 5:
     game_alive = False
-
-
-## ⚙️ Installation
-
-### 1. Cloner le projet
-
-```bash
-git clone https://github.com/ton-username/isometric-game.git
-cd isometric-game
-```
-
----
-
-### 2. Installer les dépendances
-
-```bash
-pip install pygame
-```
-
----
-
-### 3. Lancer le jeu
-
-```bash
-python main.py
-```
----
-
-## 🧩 Architecture du projet
-
-```
-.
-├── main.py
-├── libgame/
-├── assets/
-│   ├── sprites.png
-│   └── textures/
-├── screenshots/
-└── README.md
 ```
